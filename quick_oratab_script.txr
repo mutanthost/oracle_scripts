@@ -1,0 +1,21 @@
+Little script to give you a list of SIDs in the oratab:
+
+cat /etc/oratab | grep -v '^#\|^\s*$' | cut -d: -f 1
+
+$ORACLE_HOME/dbs
+
+You can adapt the above script to look in all $ORACLE_HOMEs listed in the oratab, and search for initSID.ora and spfiles for any instances:
+
+for ORACLEHOME in `cat oratab | grep -v '^#\|^\s*$' | cut -d: -f 2 |uniq`
+do 
+  ls -1 $ORACLEHOME/init*.ora | sed -n 's/init\(.*\).ora/\1/p'
+  ls -1 $ORACLEHOME/spfile*.ora | sed -n 's/spfile\(.*\).ora/\1/p'
+done
+
+tnsnames.ora / listener.ora
+
+Another option is to look in each $ORACLE_HOME/network/admin and analyse the tnsnames.ora and listener.ora files to see which instances have been configured.
+
+Already Running Instances
+
+You've already covered this with your pmon search. You can also use lsnrctl status to see which instances the listener is currently servicing requests for.
