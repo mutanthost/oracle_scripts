@@ -1,0 +1,165 @@
+
+SELECT INSTANCE_NAME, STATUS, DATABASE_STATUS FROM V$INSTANCE;
+
+
+
+
+This UNIX command will show the number of processes for your instance:
+
+ps -ef|grep $ORACLE_SID|grep -v grep|grep -v ora_|wc ?l
+
+Here is how to check if your database is running:
+
+check_stat=`ps -ef|grep ${ORACLE_SID}|grep pmon|wc -l`;
+oracle_num=`expr $check_stat`
+if [ $oracle_num -lt 1 ]
+then
+exit 0
+fi
+
+#*************************************************************
+# Test to see if Oracle is accepting connections
+#*************************************************************
+$ORACLE_HOME/bin/sqlplus -s /<<! > /tmp/check_$ORACLE_SID.ora
+  select * from v\$database;
+exit
+!
+
+#*************************************************************
+# If not, exit and e-mail . . .
+#*************************************************************
+check_stat=`cat /tmp/check_$ORACLE_SID.ora|grep -i error|wc -l`;
+oracle_num=`expr $check_stat`
+if [ $oracle_num -ne 0 ]
+then
+  mailx -s "$ORACLE_SID is down!" larry@us.oracle.com
+exit 16
+fi
+
+
+
+
+
+
+
+
+
+these are from https://www.bmc.com/blogs/top-dba-shell-scripts-for-monitoring-the-database/#listeneravail
+
+
+
+$ cat /var/opt/oracle/oratab
+###################################################################
+## /var/opt/oracle/oratab                                        ##
+###################################################################
+oradb1:/u01/app/oracle/product/8.1.7:Y
+oradb2:/u01/app/oracle/product/8.1.7:Y
+oradb3:/u01/app/oracle/product/8.1.7:N
+oradb4:/u01/app/oracle/product/8.1.7:Y
+
+
+###################################################################
+## ckinstance.ksh ##
+###################################################################
+ORATAB=/var/opt/oracle/oratab
+echo "`date`   "
+echo  "Oracle Database(s) Status `hostname` :\n"
+
+db=`egrep -i ":Y|:N" $ORATAB | cut -d":" -f1 | grep -v "\#" | grep -v "\*"`
+pslist="`ps -ef | grep pmon`"
+for i in $db ; do
+echo  "$pslist" | grep  "ora_pmon_$i"  > /dev/null 2>$1
+if (( $? )); then
+echo "Oracle Instance - $i:       Down"
+else
+echo "Oracle Instance - $i:       Up"
+fi
+done
+
+$ ckinstance.ksh
+Mon Mar  4 10:44:12 PST 2002
+
+Oracle Database(s) Status for DBHOST server:
+Oracle Instance - oradb1:   Up
+Oracle Instance - oradb2:   Up
+Oracle Instance - oradb3:   Down
+Oracle Instance - oradb4:   Up
+
+#######################################################################
+## cklsnr.sh                                                         ##
+#######################################################################
+#!/bin/ksh
+DBALIST="primary.dba@company.com, another.dba@company.com";export DBALIST
+cd /var/opt/oracle
+rm -f lsnr.exist
+ps -ef | grep mylsnr | grep -v grep  > lsnr.exist
+if [ -s lsnr.exist ]
+then
+echo
+else
+echo "Alert" | mailx -s "Listener 'mylsnr' on `hostname` is down" $DBALIST
+TNS_ADMIN=/var/opt/oracle; export TNS_ADMIN
+ORACLE_SID=db1; export ORACLE_SID
+ORAENV_ASK=NO; export ORAENV_ASK
+PATH=$PATH:/bin:/usr/local/bin; export PATH
+. oraenv
+LD_LIBRARY_PATH=${ORACLE_HOME}/lib;export LD_LIBRARY_PATH
+lsnrctl start mylsnr
+fi
+
+
+#######################################################################
+## oracle.profile ##
+#######################################################################
+EDITOR=vi;export EDITOR ORACLE_BASE=/u01/app/oracle; export
+ORACLE_BASE ORACLE_HOME=$ORACLE_BASE/product/8.1.7; export
+ORACLE_HOME LD_LIBRARY_PATH=$ORACLE_HOME/lib; export
+LD_LIBRARY_PATH TNS_ADMIN=/var/opt/oracle;export
+TNS_ADMIN NLS_LANG=american; export
+NLS_LANG NLS_DATE_FORMAT='Mon DD YYYY HH24:MI:SS'; export
+NLS_DATE_FORMAT ORATAB=/var/opt/oracle/oratab;export
+ORATAB PATH=$PATH:$ORACLE_HOME:$ORACLE_HOME/bin:/usr/ccs/bin:/bin:/usr/bin:/usr/sbin:/
+sbin:/usr/openwin/bin:/opt/bin:.; export
+PATH DBALIST="primary.dba@company.com, another.dba@company.com";export
+DBALIST
+
+#####################################################################
+## ck_tbsp.sh ##
+#####################################################################
+#!/bin/ksh
+sqlplus -s <<!
+oracle/$1@$2
+set feed off
+set linesize 100
+set pagesize 200
+spool tablespace.alert
+SELECT F.TABLESPACE_NAME,
+TO_CHAR ((T.TOTAL_SPACE - F.FREE_SPACE),'999,999') "USED (MB)",
+TO_CHAR (F.FREE_SPACE, '999,999') "FREE (MB)",
+TO_CHAR (T.TOTAL_SPACE, '999,999') "TOTAL (MB)",
+TO_CHAR ((ROUND ((F.FREE_SPACE/T.TOTAL_SPACE)*100)),'999')||' %' PER_FREE
+FROM   (
+SELECT       TABLESPACE_NAME,
+ROUND (SUM (BLOCKS*(SELECT VALUE/1024
+FROM V\$PARAMETER
+WHERE NAME = 'db_block_size')/1024)
+) FREE_SPACE
+FROM DBA_FREE_SPACE
+GROUP BY TABLESPACE_NAME
+) F,
+(
+SELECT TABLESPACE_NAME,
+ROUND (SUM (BYTES/1048576)) TOTAL_SPACE
+FROM DBA_DATA_FILES
+GROUP BY TABLESPACE_NAME
+) T
+WHERE F.TABLESPACE_NAME = T.TABLESPACE_NAME
+AND (ROUND ((F.FREE_SPACE/T.TOTAL_SPACE)*100)) < 10;
+spool off
+exit
+!
+if [ `cat tablespace.alert|wc -l` -gt 0 ]
+then
+cat tablespace.alert -l tablespace.alert > tablespace.tmp
+mailx -s "TABLESPACE ALERT for ${2}" $DBALIST < tablespace.tmp
+fi

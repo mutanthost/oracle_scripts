@@ -1,0 +1,59 @@
+SQL> col STATUS format a9
+SQL> col hrs format 999.99
+SQL> select SESSION_KEY, INPUT_TYPE, STATUS,
+to_char(START_TIME,'mm/dd/yy hh24:mi') start_time,
+to_char(END_TIME,'mm/dd/yy hh24:mi') end_time,
+elapsed_seconds/3600 hrs from V$RMAN_BACKUP_JOB_DETAILS
+order by session_key;
+SQL> /
+SESSION_KEY  INPUT_TYPE    STATUS    START_TIME     END_TIME       HRS
+ ----------- ------------- --------- -------------- -------------- -------
+ 29          DB FULL       RUNNING   01/07/14 10:28 01/07/14 10:28 .00
+SQL> /
+SESSION_KEY  INPUT_TYPE    STATUS    START_TIME     END_TIME       HRS
+ ----------- ------------- --------- -------------- -------------- -------
+ 29          DB FULL       RUNNING   01/07/14 10:28 01/07/14 10:28 .01
+SQL> /
+SESSION_KEY  INPUT_TYPE    STATUS    START_TIME     END_TIME       HRS
+ ----------- ------------- --------- -------------- -------------- -------
+ 29          DB FULL       COMPLETED 01/07/14 10:28 01/07/14 10:29 .03
+
+
+Above script will give you RMAN backup status along with start and stop timing.
+
+OR
+
+SELECT SID, SERIAL#, CONTEXT, SOFAR, TOTALWORK, 
+ROUND (SOFAR/TOTALWORK*100, 2) "% COMPLETE"
+FROM V$SESSION_LONGOPS
+WHERE OPNAME LIKE 'RMAN%' AND OPNAME NOT LIKE '%aggregate%'
+AND TOTALWORK! = 0 AND SOFAR <> TOTALWORK;
+
+ SID       SERIAL#    CONTEXT    SOFAR      TOTALWORK  %COMPLETE
+---------- ---------- ---------- ---------- ---------- ----------
+ 18        29         1          9115569    19258880   47.33
+
+
+
+Above script will give you SID, Total Work, Sofar & % of completion.
+
+You can also check historical backup status with the help of following script:
+
+set linesize 500 pagesize 2000
+col Hours format 9999.99
+col STATUS format a10
+select SESSION_KEY, INPUT_TYPE, STATUS,
+to_char(START_TIME,'mm-dd-yyyy hh24:mi:ss') as RMAN_Bkup_start_time,
+to_char(END_TIME,'mm-dd-yyyy hh24:mi:ss') as RMAN_Bkup_end_time,
+elapsed_seconds/3600 Hours from V$RMAN_BACKUP_JOB_DETAILS
+order by session_key;
+SESSION_KEY INPUT_TYPE    STATUS     RMAN_BKUP_START_TIM RMAN_BKUP_END_TIME  HOURS
+----------- ------------- ---------- ------------------- ------------------- --------
+ 137764     DB FULL       COMPLETED  06-06-2017 02:00:32 06-06-2017 04:12:13 2.19
+ 137770     ARCHIVELOG    COMPLETED  06-06-2017 04:00:29 06-06-2017 04:01:05 .01
+ 137778     ARCHIVELOG    COMPLETED  06-06-2017 06:00:27 06-06-2017 06:00:35 .00
+ 137782     ARCHIVELOG    COMPLETED  06-06-2017 08:00:32 06-06-2017 08:03:36 .05
+ 137786     ARCHIVELOG    COMPLETED  06-06-2017 10:00:30 06-06-2017 10:02:03 .03
+ 137790     ARCHIVELOG    COMPLETED  06-06-2017 12:00:30 06-06-2017 12:02:34 .03
+ 137794     ARCHIVELOG    COMPLETED  06-06-2017 14:00:30 06-06-2017 14:02:58 .04
+ . .. ...
