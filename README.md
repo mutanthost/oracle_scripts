@@ -1,2 +1,2 @@
 # oracle_scripts
-Just some handy scripts grabbed from various siurces around the web
+Just some handy scripts grabbed from various sources around the web
